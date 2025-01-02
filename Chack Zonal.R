@@ -3,10 +3,8 @@
 ### Resumen de Check Zonales ### 
 
 
-setwd("C:/Users/jorge_ramirez/Downloads/R/Check Zonal")
-
 rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
-setwd("C:/Users/jorge_ramirez/Downloads/R/Check Zonal")
+setwd("C:/Users/asus-tuf/Documents/GitHub/CheckList")
 
 
 # instalando librerias o paquetes-------
@@ -56,7 +54,7 @@ Checkdf <- mutate(Checkdf, QControles = str_count(Checkdf$`RESPECTO A LOS CONTRO
 
 ### Gráfico descargo librerias -----
 ### ggthemr es una de muchas para darle color a los gráficos
-# install.packages('patchwork')-
+#install.packages('patchwork')-
 
 #install.packages("ggthemes")
 
@@ -68,7 +66,7 @@ library(ggthemes)
 library(scales)
 library(forcats)
 
-Checkdf2 <- Checkdf [c(5,19, 20, 21, 22 )]
+Checkdf2 <- Checkdf [c(4, 18, 19, 20, 21 )]
 
 Checkdf2[is.na(Checkdf2)] <- 0
 
@@ -177,7 +175,7 @@ DFCZ <- mutate(DFCZ, Ele_Posventa = str_count(Checkdf$ControlesHechos, pattern =
 
 
 
-rm(DFCZ_largo)
+#rm(DFCZ_largo)
 DFCZ_largo <- DFCZ %>% tidyr::gather(key = "controlado", valores, c(5:9))
 DFCZ_largo [is.na(DFCZ_largo)] <- 0
 
