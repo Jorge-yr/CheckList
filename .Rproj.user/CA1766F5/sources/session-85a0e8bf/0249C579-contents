@@ -1,0 +1,430 @@
+## Ramirez Jorge, 23 de Marzo de 2023 ##
+
+# siempre comienza la sesion limpiando los paneles
+
+rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
+
+## Selección Directorio de trabajo
+setwd("C:/Users/jorge_ramirez/OneDrive - Previsora del Parana SRL/Escritorio/Archivos R - Data Science/HACKATON")
+
+#vamos a descargar ventas y Stock de Visionaris
+
+# instalando librerias o paquetes-------
+#install.packages("tidyverse") # instalo el paquete
+#install.packages("tidyverse")
+library(tidyverse)
+
+tidyverse_packages()
+library(dplyr)
+library(scales)
+
+### Gráfico descargo librerias -----
+### ggtheme es una de muchas para darle color a los gráficos
+# install.packages('patchwork')-
+#install.packages("ggthemes")
+library(ggplot2)
+library(patchwork)
+library(ggthemes)
+library(forcats)
+
+#install.packages("psych")
+library(psych)
+
+# Vtas del analisis "Ventas proyectadas"
+# Stock de "Stock revision1"
+
+
+Ventas <- read.csv2("export (8).csv",header = TRUE,sep = ";", dec=",") #leo el archivo con datos de ventas
+
+Ventas $Fecha.Movimiento <- as.Date(Ventas $Fecha.Movimiento)
+
+anual_rubro1 <- readxl::read_excel("RubrosMes.xlsx", sheet = "Hoja1", col_names = T, col_types = NULL) #leo el archivo con fechas
+
+Fecha_sem <- readxl::read_excel("Fecha_sem.xlsx", sheet = 1, col_names = T, col_types = NULL) #leo el archivo con fechas
+
+Fecha_sem $Fecha.Movimiento <- as.Date(Fecha_sem $Fecha.Movimiento)
+
+
+# Manipulación de datos
+
+#uno 2 tablas por la variable fecha
+Ventas <- inner_join(Ventas, Fecha_sem, by = "Fecha.Movimiento") # Unir numero de semana con fechas
+
+
+rm(Fecha_sem)
+
+### Eliminar Rubros que no corresponden, segun entreevista con area compras
+
+a_eliminar <- Ventas$Rubro %in% c("Sin Datos", "S/A", "SIN ASIGNACION", "0,00", "borrar.. CUIDADO PERSONAL")
+Ventas <- Ventas[!a_eliminar,]
+
+
+###
+
+Ventas_Q <- Ventas %>%
+  group_by( Semana_anual, Rubro) %>%
+  summarise(
+    VentasQ = sum(Cantidad.SUM.)
+  )
+
+# 1) Quiero clusterizar Rubros
+Suma_Ventas <- Ventas %>%
+  group_by(Rubro) %>%
+  summarise(
+    VentasQ = sum(Cantidad.SUM.)
+  )
+
+h1  <- hist(Suma_Ventas$VentasQ, prob = TRUE, breaks = 20, main = "apariciones de valores") #Histograma de VentasQ x rubro
+
+summary(Suma_Ventas$VentasQ)
+table(Suma_Ventas$VentasQ)
+
+
+Suma_Ventas  <-  Suma_Ventas[order(Suma_Ventas$VentasQ, decreasing = FALSE), ] # Ordenamos los valores para visulizar mejor
+head(Suma_Ventas, 15)
+
+Suma_Ventas  <- filter(Suma_Ventas, Suma_Ventas$VentasQ > 200) # Filtramos y dejamos mayores que 200
+
+h2  <- hist(Suma_Ventas$VentasQ, prob = TRUE, breaks = 20, main = "apariciones de valores def")
+summary(Suma_Ventas$VentasQ)
+
+
+
+## Remplazamos la tabla Ventas_Q que tenia 7822 obs y pasa a 7751 Obs
+# Saco a Suma_Ventas los valores para traer datos de ventas sobre los rubros selecionados
+Rubros_a_usar  <- Suma_Ventas [c(1)]
+Rubros_codigo  <- Suma_Ventas [c(1)]
+Rubros_codigo  <- mutate(Rubros_codigo, r = 1:76)
+Rubros_codigo  <- mutate(Rubros_codigo, cod_rub = paste0("Rubro",sort(r)))
+Rubros_codigo  <- Rubros_codigo [c(1,3)]
+
+write.table(Rubros_codigo, file = "Rubro_cod.csv", sep = ";", dec = ".",row.names = F)
+# VER: Rubros_a_usar  <- mutate(Rubros_a_usar, CodRub = "Rub"+1:76)
+
+
+Ventas_Q <- left_join(Rubros_a_usar, Ventas_Q, by= "Rubro", copy)
+
+
+Ventas_QEx  <- spread(Ventas_Q, key = Rubro, value = VentasQ)
+
+colSums(sapply(Ventas_QEx, is.na)) #Reviso si hay NA en las columnas
+
+Ventas_QEx[is.na(Ventas_QEx)] <- 0 #Reemplazo los NA 
+
+
+
+###
+
+#
+######################################################################
+Hist_Rub <- ggplot(Ventas, aes(x = Fecha.Movimiento, y = Cantidad.SUM.)) + 
+  geom_line()
+
+Hist_Rub
+
+### Creo un DAtaframe de Ventas_Q con la correlatividad de las variables
+cor_rubros <- round(cor(Ventas_QEx[,2:77]),1)
+Rub_cor  <- data.frame(Rubro = colnames(Ventas_QEx[c(2:77)]), round(cor(Ventas_QEx[,2:77]),2))
+
+
+### Modifico la tabla para que muestre los valores de correlación en columnas 
+#y poder clasificar (en clusters) las variables de manera más facil las 1120 variables
+Rub_cor <- Rub_cor %>% tidyr::gather(key = "rubro2", "valores", c(2:77)) 
+
+##El próximo paso es reducir la tabla a variables con alta Correlación + o - 
+Rub_cor1  <- filter(Rub_cor, valores > 0.92 )
+
+     #Rub_cor2  <- filter(Rub_cor, valores == -0.9 | valores == -1.0) #solo 2 movim de panaderia importan
+
+
+### En Rub_cor1 ver cuales variables son correlativas con otra.
+Repet  <-  data.frame(table(Rub_cor1$rubro2))
+Repet$Freq  <- Repet$Freq -1 #con esto saco la autocorrelatividad
+Repet2  <- filter(Repet, Freq > 0 ) #Filtro 
+Repet2  <-  Repet2[order(Repet2$Freq, decreasing = TRUE), ]
+print(Repet2)
+names(Repet2)[1] <-"Rubro" #Cambio el nombre de la columna1 de repet
+names(Repet)[1] <-"Rubro" #Cambio el nombre de la columna1 de repet
+Repet3   <-  Repet2[c(1)]
+
+  
+Rub_cor  <- left_join(Repet3, Ventas_Q, by = "Rubro")
+Rub_QEx  <- spread(Rub_cor, key = Rubro, value = VentasQ) #Trae error en los espacios
+## corregimos Rub Cor
+Repet3$Rubro  <-  str_replace_all (Repet3$Rubro, c ("HIGIENE.Y.CUIDADO.PERSONAL" = "HIGIENE Y CUIDADO PERSONAL",
+                                                    "CUIDADO.DE.LA.ROPA" = "CUIDADO DE LA ROPA",
+                                                    "SAL..CONDIMENTOS..CALDOS.Y.SABORIZADORES" = "SAL, CONDIMENTOS, CALDOS Y SABORIZADORES",
+                                                    "PAÑALES.ALGODONES.Y.APÓSITOS" = "PAÑALES ALGODONES Y APÓSITOS",
+                                                    "MATE." = "MATE ",
+                                                    "YERBA." ="YERBA ",
+                                                    "POLLO." = "POLLO ",
+                                                    "HIGIENE.Y.CUIDADO.DEL.HOGAR" = "HIGIENE Y CUIDADO DEL HOGAR",
+                                                    "LEGUMBRES." = "LEGUMBRES ",
+                                                    "borrar...CUIDADO.PERSONAL" = "borrar...CUIDADO PERSONAL"))
+  
+Rub_cor  <- left_join(Repet3, Ventas_Q, by = "Rubro")
+
+Rub_QEx  <- spread(Rub_cor, key = Rubro, value = VentasQ) #Trae error en los espacios
+colSums(sapply(Rub_QEx, is.na)) #Reviso si hay NA en las columnas
+
+Rub_QEx[is.na(Rub_QEx)] <- 0 #Reemplazo los NA 
+
+cor_rubros <- round(cor(Rub_QEx[,2:15]),2)
+cor_rubros[is.na(cor_rubros)] <- 0 #Reemplazo los NA 
+
+heatmap(cor_rubros)
+
+
+table(Repet2$Freq) #Ver cuantos rubros correlativos tiene
+
+Rub_cor1 <- inner_join(Rub_cor1, Repet2, by = "Rubro") # Unir numero de repeticiones por rubro
+
+
+### 2) Dataframe para predicción
+Ventas1  <- left_join(Ventas, Rubros_codigo, by = "Rubro")
+
+Ventas_Prop1 <- Ventas1 %>%
+  group_by( Anual_semana, cod_rub) %>%
+  summarise(
+    VentasQ = sum(Cantidad.SUM.)
+  )
+
+colSums(sapply(Ventas_Prop1, is.na)) #Reviso si hay NA en las columnas
+
+Ventas_Prop <- Ventas_Prop1[!is.na(Ventas_Prop1$cod_rub),] ## Elimino los na de cod_rub
+
+
+Ventas_PropEx  <- spread(Ventas_Prop, key = cod_rub, value = VentasQ) #Trae error en los espacios
+Ventas_PropEx [is.na(Ventas_PropEx )] <- 0 #Reemplazo los NA 
+
+Ventas2021  <- filter(Ventas_PropEx, Anual_semana < 2022)
+Ventas2022  <- filter(Ventas_PropEx, Anual_semana > 2022)
+
+vtas_prop2021  <- as.matrix(Ventas2021 [c(2:77)])
+vtas_prop2021  <- prop.table(vtas_prop2021, 2)
+
+vtas_prop2022  <- as.matrix(Ventas2022 [c(2:77)])
+vtas_prop2022  <- prop.table(vtas_prop2022, margin = 2)
+
+Ventas_Prop1 = rbind(vtas_prop2021, vtas_prop2022)
+Ventas_Prop1   <- as.data.frame(Ventas_Prop1)
+Semana_anual   <- Ventas_QEx[c(1)]
+Ventas_Prop1   <- cbind2(Semana_anual, Ventas_Prop1)
+
+
+head(Ventas_Prop1)
+
+write.table(Ventas_Prop1, file = "Ventas_prop_rubro.csv", sep = ";", dec = ".",row.names = F)
+
+#### Saco las oservaciones "Sin Datos" de UN
+# Resumo por semana 
+##############(falta variable Sucursal)
+
+WQ<- Ventas %>%
+  group_by( Sucursal.Principal, Semana_anual, Rubro, Marca) %>%
+  summarise(
+    VentasQ = sum(Cantidad.SUM.),
+    VentasARS = sum(Importe.Total.SUM.)
+  )
+
+
+help("write.table")
+write.table(WQ,file = "Ventas_Semanal.csv",sep=";", dec = ".",row.names = F)
+
+
+############################################################
+###########    No USAR!!! de aca en adelante    ##################
+      ##############################################
+# Traspolar anual_rubro1
+
+# Transpone todas las columnas menos la primer
+anual_rubro <- data.frame(t(anual_rubro1[-1]))
+# Añadimos los nombres de las columnas
+colnames(anual_rubro) <- t(anual_rubro1[1])
+
+
+####### Veo igualdad entre rubros
+
+
+
+Brub <- anual_rubro %>% tidyr::gather("rubro", "valores", c(1:81)) 
+
+BPRub  <- Brub %>%   ggplot(., aes(rubro, valores))+
+  geom_boxplot() + theme( panel.background = element_rect(fill = "#EEAD0E"),
+                          axis.text.x = element_text(angle = -30, size = 6, vjust = 1, hjust = 0))
+
+LineRub  <- Brub %>%   ggplot(., aes(rubro, valores))+
+  geom_line(size = 1.2) + theme( panel.background = element_rect(fill = "#EEAD0E"),
+                                 axis.text.x = element_text(angle = -30, size = 6, vjust = 1, hjust = 0))
+
+
+BPRub/LineRub
+
+
+#tenemos que segmentar los rubros según su comportamiento 
+
+#Vamos a ver la dispersión de los valores
+RubroP1   <- 
+  data.frame(rubro = names(anual_rubro[c(1:81)]),
+             Min = t(summarise_all(anual_rubro[c(1:81)], min)),  
+             Max = t(summarise_all(anual_rubro[c(1:81)], max)))
+
+RubroP1   <- mutate(RubroP1, Diferencia = Max-Min)
+
+# Ahora uno con el data frame Anual_rubro1 para segmentar
+
+anual_rubro1   <- left_join(anual_rubro1, RubroP1, by = c('rubro'))
+
+
+### Empiezo a separar 
+g1   <- anual_rubro1$Diferencia < 0.02
+
+RG1 <- anual_rubro1[g1,] #es nuestro primer grupo
+RG3 <- anual_rubro1[!g1,] #el resto
+
+
+g2    <- RG3$Diferencia < 0.09
+RG2 <- RG3[g2,] #es nuestro segundo grupo
+RG3 <- RG3[!g2,] #el resto
+
+### GENERO/EXPORTO, TABLAS POR GRUPO EN CSV
+#write.table(RG1,"grupo1.csv",sep=";",row.names = F)
+
+# se genera un theme para nuestros gráficos
+RSform  <- theme( panel.background = element_rect(fill = "#EEAD0E"),
+                  axis.text.x = element_text(angle = -30, size = 6, vjust = 1, hjust = 0))
+
+
+RS1   <- ggplot2::ggplot(RG1, aes(rubro, Diferencia)) + geom_col() + RSform
+
+RS2 <- ggplot2::ggplot(RG2, aes(rubro, Diferencia)) + geom_col() + RSform
+
+RS3 <- ggplot2::ggplot(RG3, aes(rubro, Diferencia)) + geom_col() + RSform
+
+RS1/RS2/RS3
+
+
+#Exploración de Subgrupos
+
+Vta_anual  <- ggplot(WQ, aes(Rubro, VentasQ)) + geom_col() + RSform
+Vta_anual 
+
+WQ  <- filter(WQ, VentasQ >0)
+
+WQRub <- WQ %>%
+  group_by( Rubro) %>%
+  summarise(
+    VentasQ = sum(VentasQ)
+  )
+
+#### Se revisa las cantidades totales de Ventas y se excluye valores menores a 48
+WQRub  <- filter(WQRub, VentasQ >48 & Rubro !="SIN ASIGNACION" & Rubro!="Sin Rubro")
+
+
+#### Grafico para ver los rubros relevantes
+
+Vta_anual  <- ggplot(WQRub, aes(Rubro, VentasQ)) + geom_col() +
+  ggtitle("Cantidad anual de Ventas por Rubro") +
+  geom_text(aes(label=VentasQ), stat = "identity", vjust=-0.5, color="black",
+            position = position_dodge(0.3), angle=45 ,  size=2.0)+ RSform
+
+Vta_anual 
+
+
+
+RG3Plot <- RG3 %>% tidyr::gather(key = "mes", "valores", c(2:13)) #Cambio el formato del DF pongo todos los valores en una sola columna
+
+RG3Plot $mes   <- as.factor(str_replace_all (RG1Plot $mes  , c ('ener'= '01',
+                                                                'feb'='02',
+                                                                'mar'='03',
+                                                                'abr'='04',
+                                                                'may'='05',
+                                                                'jun'='06',
+                                                                'jul'='07',
+                                                                'ago'='08',
+                                                                'sep'='09',
+                                                                'oct'='10',
+                                                                'nov'='11',
+                                                                'dic'='12'))) 
+
+RG3Plot1  <- subset(RG3Plot, Diferencia < 0.14, select = c(rubro, mes, valores))
+
+RG3Line <- ggplot(RG3Plot1, aes(mes, valores, group = rubro, color = rubro))+
+  geom_line(size = 1.2) #+ theme(legend.position = "none")
+
+RG3Line
+
+### comportamiento similar G1  "Leche en polvo", Sopas y Termos
+### G1b Pizza Congeladas, "Papas Congeladas" y varios
+
+#Trasponer RG2 para probar correlacion
+
+Prub <- RG2 %>% tidyr::gather(key = "mes", "valores", c(2:13)) 
+
+PrubG  <- Prub %>%   ggplot(., aes(mes, valores, group = rubro, color = rubro))+
+  geom_line() + RSform
+
+PrubG
+RG2  <- mutate(RG2, Grupo = "G2") 
+
+Prueba1  <- left_join(anual_rubro1, RG2$Grupo, by = "rubro")
+
+correlat <- data.frame(round(cor(anual_rubro),1))
+
+write.table(correlat,"correlacion_rubros.txt",sep=";",row.names = F)
+
+
+#______________________________________________Probado
+
+
+
+
+WQ <- inner_join(Ventas, Fecha_sem, by = "Fecha.Movimiento") # Unir numero de semana con fechas
+
+WQ  <- subset(WQ, select = -c(Fecha.Movimiento, Rubro))  #Sacar columna afiliado 
+names(WQ)[2] <-"Cantidad.Art"
+WQ$Semana_anual   <- as.factor(WQ$Semana_anual)
+WQ  <- WQ %>% 
+  group_by(Rubro, Cod.Suc, Semana_anual)  %>%
+  summarise(Cantidad.Art = sum(Cantidad.Art))
+
+### Separo las UN
+
+WQE <- subset(WQ, Unidad.De.Negocio == "Electro")
+WQS <- subset(WQ, Unidad.De.Negocio == "Supermercado")
+  
+WQE  <- mutate(WQE, Evol = c(0, diff(WQE$Cantidad.Art)))
+WQE$Evol   <-  percent(WQE$Evol/WQE$Cantidad.Art)
+
+WQE  <- mutate(WQE, Dife = c(0, diff(WQE$Cantidad.Art)))
+
+WQS  <- mutate(WQS, Evol = c(0, diff(WQS$Cantidad.Art)))
+WQS$Evol   <-  percent(WQS$Evol/WQS$Cantidad.Art)
+
+WQS  <- mutate(WQS, Dife = c(0, diff(WQS$Cantidad.Art)))
+
+
+#Ventas_Sem <- mutate(Ventas_Sem, week = Fecha.Movimiento/7)
+
+## Graficos
+
+centrar  <- theme_bw() + theme_excel() + theme(
+                  plot.title=element_text(hjust=0.4, face='bold', color='dark green'),
+                  plot.subtitle=element_text(hjust=0.5))
+
+WQE_G <- ggplot(WQE, aes(Num.Semana, Cantidad.Art)) + geom_bar(stat = "identity", fill = "blue")+
+  labs(title='UN ELECTRO', 
+       subtitle='cantidad de articulos por semana',
+       caption= NULL) +
+  geom_text(aes(label= Evol), stat = "identity", vjust=1.0, color="white",
+            position = position_dodge(0.9),  size=4.0) + centrar 
+
+WQS_G <- ggplot(WQS, aes(Num.Semana, Cantidad.Art)) + geom_bar(stat = "identity", fill = "#528B8B")+
+  labs(title='UN SUPER', 
+           subtitle='cantidad de articulos por semana', 
+           caption= NULL)+
+  geom_text(aes(label= Evol), stat = "identity", vjust=1.0, color="white",
+            position = position_dodge(0.9),  size=4.0) + centrar
+
+WQE_G/WQS_G
+

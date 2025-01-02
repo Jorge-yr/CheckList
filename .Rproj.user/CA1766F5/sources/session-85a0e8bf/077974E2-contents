@@ -1,0 +1,119 @@
+## Ramirez Jorge, 23 de Marzo de 2023 ##
+
+# siempre comienza la sesion limpiando los paneles
+
+rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
+
+## Selección Directorio de trabajo
+setwd("C:/Users/jorge_ramirez/Downloads/R/seguimiento articulos")
+
+#vamos a descargar ventas y Stock de Visionaris
+
+# instalando librerias o paquetes-------
+#install.packages("tidyverse") # instalo el paquete
+#install.packages("tidyverse")
+library(tidyverse)
+
+tidyverse_packages()
+library(dplyr)
+library(scales)
+
+### Gráfico descargo librerias -----
+### ggtheme es una de muchas para darle color a los gráficos
+# install.packages('patchwork')-
+#install.packages("ggthemes")
+library(ggplot2)
+library(patchwork)
+library(ggthemes)
+library(forcats)
+
+#install.packages("psych")
+library(psych)
+
+# Vtas del analisis "Ventas proyectadas"
+# Stock de "Stock revision1"
+
+
+Ventas <- read.csv2("export (44).csv",header = TRUE,sep = ";", dec=",") #leo el archivo con datos de ventas
+
+Ventas $Fecha.Movimiento <- as.Date(Ventas $Fecha.Movimiento)
+
+articulos <- readxl::read_excel("ctes_sup_20may.xlsx", sheet = "Hoja3", col_names = T, col_types = NULL) #leo el archivo con fechas
+
+### Eliminar Rubros que no corresponden, segun entreevista con area compras
+
+a_eliminar <- Ventas$Cod.Producto %in% c("Sin Datos", "S/A", "SIN ASIGNACION", "0,00", "borrar.. CUIDADO PERSONAL")
+Ventas <- Ventas[!a_eliminar,]
+
+Ventas$Cod.Producto <- str_replace_all (Ventas$Cod.Producto, c (",00" = ""))
+                 
+Ventas$Cod.Producto <- as.numeric( Ventas$Cod.Producto)
+
+#articulos <- mutate(articulos, incluye = "SI")
+rm(base2)
+
+#base <- merge(x = articulos, y = Ventas[c(2,3 )], by = "Cod.Producto")
+
+base  <- left_join(articulos[c(1)], Ventas, by = "Cod.Producto") # Unir por cod articulo
+
+### Convertir fecha inicio en fecha para R 
+############################################
+###########################################
+desde <- as.Date("2023-05-25")           ##
+hasta <- as.Date("2023-05-28")          ##
+##
+###########################################
+############################################
+
+Fecha1 <- base$Fecha.Movimiento < desde
+print(Fecha1)
+base1 <- base[!Fecha1,] 
+
+Fecha1 <- base1$Fecha.Movimiento > hasta
+print(Fecha1)
+base1 <- base1[!Fecha1,] 
+
+base2  <- inner_join(unique(base1[c(4)]), Ventas, by = "ID.Formulario") # Unir por cod articulo
+
+#Art_distinct_x_Fact <- count(base2, ID.Formulario)
+
+base2 <- base2 %>% filter(Cantidad.SUM. >0 )
+base1 <- base1 %>% filter(Cantidad.SUM. >0 )
+
+print(summary(base2))
+
+ventas_ofertas <- base1 %>% group_by(ID.Formulario, Articulo) %>% summarise(
+  Qart = sum(Cantidad.SUM.),
+  Pesos = sum(Importe.Total.SUM.)
+)
+
+summary(ventas_ofertas)
+
+
+ventas_colaterales <- base2 %>% group_by(ID.Formulario, Cod.Producto) %>% summarise(
+  Qart = sum(Cantidad.SUM.),
+  Pesos = sum(Importe.Total.SUM.)
+)
+summary(ventas_colaterales)
+
+
+Articulos_Q_total <- sum(ventas_colaterales$Qart)
+Articulos_oferta <- sum(ventas_ofertas$Qart)
+
+
+#install.packages("writexl")
+library("writexl")
+
+write_xlsx(ventas_colaterales, "ventas por oferta.xlsx")
+
+#Graficos
+
+Sucu1 <- ggplot(base1, aes(Sucursal.Principal, Cantidad.SUM., fill = Rubro)) + geom_bar(stat = "identity")
+Sucu1
+Sucu2 <- ggplot(base2, aes(Rubro, Cantidad.SUM., fill = Fecha.Movimiento)) +
+  theme( plot.background = element_rect(fill = "light grey", ),
+         panel.background = element_rect(fill = "#EEAD0E"),
+         axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0)) + 
+  geom_bar(stat = "identity")
+Sucu2
+

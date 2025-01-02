@@ -1,0 +1,106 @@
+----#### JORGE RAMIREZ #####
+### Fecha 23/05/2023 
+### Resumen de Check varios ### 
+
+
+
+
+rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
+setwd("C:/Users/jorge_ramirez/Downloads/R/Check_o")
+
+
+# instalando librerias o paquetes-------
+#install.packages("tidyverse") # instalo el paquete
+#install.packages("tidyverse")
+library(tidyverse)
+
+tidyverse_packages()
+
+
+# Importo el Excel
+
+
+CheckTraf<- readxl::read_excel("Trafico Electro + Evaluaciones Financieras 5.xlsx", sheet = "Form1", col_names = T, col_types = NULL) #leo el archivo con datos de checks lo convierto DF
+
+### Le doy formato a las columnas en referencia a sus datos
+
+
+CheckTraf$`Hora de inicio` <- as.Date(CheckTraf$`Hora de inicio`)
+
+class(CheckTraf$`Hora de inicio`)
+
+CheckTraf$Pregunta <-as.factor(CheckTraf$Pregunta)
+levels(CheckTraf$Pregunta)
+
+
+### Convertir fecha inicio en fecha para R 
+############################################
+###########################################
+desde <- as.Date("2022-12-01")           ##
+#hasta <- as.Date("2023-12-31")          ##
+##
+###########################################
+############################################
+
+Fecha1 <- CheckTraf$`Hora de inicio`< desde
+print(Fecha1)
+CheckT_1 <- CheckTraf[!Fecha1,] 
+
+#Checkdf$Pregunta <-as.factor(Checkdf$Pregunta)
+#levels(Checkdf$Nombre)
+
+
+#### contar apariciones de ";" que significa 1 tilde
+
+CheckT_1 <- mutate(CheckT_1, QDirecto = str_count(CheckT_1$`Financiera`, pattern = "Direc"))
+CheckT_1 <- mutate(CheckT_1, QWenance = str_count(CheckT_1$`Financiera`, pattern = "Wenan"))
+CheckT_1 <- mutate(CheckT_1, QSantander = str_count(CheckT_1$`Financiera`, pattern = "Santand"))
+#Checkdf <- mutate(Checkdf, QControles = str_count(Checkdf$`RESPECTO A LOS CONTROLES EN SUCURSAL, esta ok ....  ¿?`, pattern = ";"))
+
+
+### Gráfico descargo librerias -----
+### ggthemr es una de muchas para darle color a los gráficos
+# install.packages('patchwork')-
+
+#install.packages("ggthemes")
+
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(ggthemes)
+library(scales)
+library(forcats)
+
+
+unique(CheckT_1$Pregunta)
+#install.packages("writexl")
+library("writexl")
+
+write_xlsx(CheckT_1, "check_trafico.xlsx")
+
+### Genero un resumen agrupado por Gte Zonal
+
+Cant_suc  <- CheckT_1 [c(6,12,13)] %>%
+ spread( key = `tipo de consulta`, value = str_count(Financiera)) #Trae error en los espacios
+
+### Genero un resumen agrupado por Gte Zonal
+
+Check_g<- mutate(CheckT_1, QTC = 1) %>%
+  group_by(Pregunta, `tipo de consulta`) %>%
+  summarise(
+    tipo_consulta = sum(QTC)
+  ) 
+
+Check_g <- Check_g[!is.na(Check_g$Pregunta),]#
+Check_g$Pregunta <- as.character(Check_g$Pregunta)
+print(Check_g)
+
+Check_g1 <- Check_g %>% ggplot(aes(Pregunta, tipo_consulta, fill = `tipo de consulta`)) +
+  theme( plot.background = element_rect(fill = "light grey", ),
+         panel.background = element_rect(fill = "#EEAD0E"),
+         axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0))+ 
+  labs(x = "Sucursales")+
+  geom_bar(stat = "identity",color="white") 
+
+Check_g1

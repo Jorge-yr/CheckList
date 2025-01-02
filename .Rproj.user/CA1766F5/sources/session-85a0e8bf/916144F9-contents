@@ -1,0 +1,61 @@
+### JORGE RAMIREZ
+### 2023 05 22
+####   prueba REVISTA DE OFERTAS
+
+
+# siempre comienza la sesion limpiando los paneles
+
+rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
+
+## Selección Directorio de trabajo
+setwd("C:/Users/jorge_ramirez/Downloads/R/cuadro")
+
+
+#vamos a descargar ventas y Stock de Visionaris
+
+
+# instalando librerias o paquetes para Data Science-------
+#install.packages("tidyverse") # instalo el paquete
+#install.packages("tidyverse")
+library(tidyverse)
+
+tidyverse_packages()
+
+### Gráfico descargo librerias -----
+### ggthemr es una de muchas para darle color a los gráficos
+# install.packages('patchwork')-
+#install.packages("ggthemes")
+#install.packages ("ggplot2")
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(ggthemes)
+library(scales)
+library(forcats)
+library(ggpubr)
+library(jpeg)
+library(readxl)
+
+Detail_revista <- readxl::read_excel("c_prueba.xlsx", sheet = "Hoja1", col_names = T, col_types = NULL) #leo el archivo con fechas
+#Fondo <- png::readPNG("2023revista.png")  
+Fondo <- readJPEG("2023revista.jpg")
+
+hoja1  <- Detail_revista %>% ggplot(aes(Horizontal,Vertical)) + 
+  labs(title = 'Muestra revista descripcion y precio',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Solo Super',
+       y = NULL,
+       x = 'Encolumnado articulos') +
+  ylim(c(-2, 25))+
+  background_image(Fondo)+
+  geom_text(aes(x=Horizontal, y=Vertical, label = texto_c1), 
+                                   position = position_stack(),vjust = 3 ) + 
+  geom_text(aes(x=Horizontal, y=Vertical, label = texto_c2), 
+            position = position_stack(),vjust = 5 ) +
+  geom_text(aes(x=Horizontal, y=Vertical, label = paste("$ ", Precio)), 
+            position = position_stack(),vjust = 1 , hjust = 3) +
+ theme_classic() #+ geom_text(aes(VentasARS))
+
+hoja1

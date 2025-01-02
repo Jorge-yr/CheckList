@@ -1,0 +1,352 @@
+### JORGE RAMIREZ
+### 2023 04 19
+####   RESUMEN DE RESULTADOS REVISTA DE OFERTAS
+
+
+setwd("C:/Users/jorge_ramirez/Downloads/R/Ventas_Revista")
+
+# siempre comienza la sesion limpiando los paneles
+
+rm(list=ls()) # Borrar los datos de entorno cargados en memoria 
+
+## Selección Directorio de trabajo
+setwd("C:/Users/jorge_ramirez/Downloads/R/Ventas_Revista")
+
+
+#vamos a descargar ventas y Stock de Visionaris
+
+
+# instalando librerias o paquetes para Data Science-------
+#install.packages("tidyverse") # instalo el paquete
+#install.packages("tidyverse")
+library(tidyverse)
+
+tidyverse_packages()
+
+### Gráfico descargo librerias -----
+### ggthemr es una de muchas para darle color a los gráficos
+# install.packages('patchwork')-
+#install.packages("ggthemes")
+
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(ggthemes)
+library(scales)
+library(forcats)
+
+###### Shiny es para crear archivos html y dashboard ----
+##install.packages("shiny")
+#shinyOptions()
+#library(shiny)
+#library(shinydashboard)
+
+
+
+# Vtas del analisis "Ventas proyectadas"
+# Stock de "Stock revision1"
+
+
+Ventas <- read.csv2("export (47).csv",header = TRUE,sep = ";", dec=",") #leo el archivo con datos de ventas
+
+
+#Art_x_mes <- readxl::read_excel("Revista_vs_Cia_definitivo.xlsx", sheet = "prod revista", col_names = T, col_types = NULL) #leo el archivo con fechas
+
+Detail_revista <- readxl::read_excel("Detalle_articulos_revista_x_mes.xlsx", sheet = "Hoja1", col_names = T, col_types = NULL) #leo el archivo con fechas
+
+#### CAMBIAR SIEMPRE LA COLUMNA SEGUN MES:
+Art_mes_actual  <- Art_x_mes [c(15)]
+rm(Art_x_mes)
+
+### Elimino Códigos NA de Ventas
+Ventas <-  Ventas[!is.na(Ventas$Cod.Producto),]
+#Art_mes_actual <-  Art_mes_actual[!is.na(Art_mes_actual),]
+
+
+### Edicion agrego col de validacion de art revista ---
+
+Detail_revista  <- mutate(Detail_revista, "valid_art" = "REVISTA")
+#colnames(Art_mes_actual)  <- c('Cod.Producto', 'valid_art')
+Ventas$Cod.Producto   <- str_replace_all (Ventas$Cod.Producto, c (',00'= '')) 
+
+Ventas$Cod.Producto   <- as.numeric(Ventas$Cod.Producto)
+
+resumen_kpi_revista    <- Detail_revista [c(1, 8, 10, 12, 14)]
+
+resumen_kpi_revista    <- resumen_kpi_revista %>% rename (Cod.Producto = SKU)
+
+Vta_df   <- Ventas %>% left_join(resumen_kpi_revista, by = "Cod.Producto", keep = TRUE)
+
+Vta_df$valid_art[is.na(Vta_df$valid_art)] <- "SALON"
+Vta_df[is.na(Vta_df)] <- "None"
+
+
+Vta_df  <- Vta_df [c(1:13)]
+Vta_df  <- mutate(Vta_df, tipo_prod = "" )
+
+
+
+Vta_df  <- Vta_df %>% rename (VentasARS = Importe.Ventas.Local.SUM.)
+
+a_eliminar <- Vta_df$Rubro %in% c("Sin Datos", "S/A", "SIN ASIGNACION", "0,00", "borrar.. CUIDADO PERSONAL")
+Vta_df <- Vta_df[!a_eliminar,]
+
+
+Mes_actual <- unique(Vta_df$Año.Mes.Numerico)
+print(Mes_actual)
+
+### Empezamos con Graficos y Descripcion ----
+
+
+Revista   <- Vta_df %>%
+  group_by(valid_art) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = sum(VentasARS))  %>% ggplot(aes(x="", Cantidad_SUM, fill = valid_art))+
+  geom_bar(stat = "identity",color="white")+
+  labs(title = "Ventas en Cantidad", caption = paste("Mes revisión ", Mes_actual)) +
+  geom_text(aes(label= Cantidad_SUM), stat = "identity", vjust=-0.3, color="black",
+            position = position_stack(0.7),  size=4.0) +
+  coord_polar(theta="y")+ theme_fivethirtyeight()+theme(plot.background = element_rect(fill = "green")) +
+    Vta_df %>%
+  group_by(valid_art) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/sum(Vta_df$VentasARS),2))  %>% ggplot(aes(x="", VentasARS, fill = valid_art))+
+  geom_bar(stat = "identity",color="white")+
+  labs(title = "Participación % en pesos") +
+  geom_text(aes(label= paste(VentasARS*100, " %")), stat = "identity", vjust=-0.3, color="black",
+            position = position_stack(0.6),  size=4.0) +
+  coord_polar(theta="y")+ theme_fivethirtyeight()+theme(plot.background = element_rect(fill = "green"))
+
+
+Revista
+
+
+####### Resultado de Ventas por tipo
+Vta_df$tipo_prod    <- Vta_df$Rubro
+print(Vta_df  %>% distinct(Rubro))
+Vta_df$tipo_prod  <- str_replace_all(Vta_df$tipo_prod, c("CELULARES" = "TECNO",
+                                                         "TV LED" = "TECNO",
+                                                         "BAFLES Y COLUMNAS" = "TECNO",
+                                                         "AUDIO PORTABLE" = "TECNO",
+                                                         "NOTEBOOKS" = "TECNO",
+                                                         "TABLET" = "TECNO",
+                                                         "COMPUTADORAS" = "TECNO",
+                                                         "SISTEMAS DE AUDIO" = "TECNO",
+                                                         "CONSOLAS" = "TECNO",
+                                                         "IMPRESIÓN" = "TECNO"))
+
+print(Vta_df  %>% distinct(tipo_prod))
+#write_xlsx(Vta_df, "Revisar VTADF1.xlsx")
+
+#xr <- list( "TECNO", "MOTOCICLETAS", "DISCONTINUOS") # LISTA DE TIPO_PROD QUE NO QUIERO CAMBIA
+xr <- Vta_df$tipo_prod %in% c("TECNO", "MOTOCICLETAS", "DISCONTINUOS")
+Vta_df$tipo_prod  <- ifelse(xr, Vta_df$tipo_prod, "NO_TECNO") #cambio el resto diferente la lista generada
+#Vta_df$tipo_prod  <- Vta_df$tipo_prod !xr "NO_TECNO" #cambio el resto diferente la lista generada
+
+
+print(Vta_df  %>% distinct(tipo_prod))
+
+#### Grafico Ventas por tipo de Porducto
+
+VTA_TECNO <-  Vta_df %>%
+  group_by(tipo_prod) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/sum(Vta_df$VentasARS),2)) %>%
+  mutate( etiqueta = scales::percent(VentasARS))%>% 
+  ggplot(aes(x="", VentasARS, fill = tipo_prod))+
+  geom_bar(stat = "identity", color = "white")+
+  labs(title = "Participación % Tipo Producto en pesos") +
+    geom_text(aes(label= etiqueta), stat = "identity", vjust=0.9, color="lightblue",
+            position = position_stack(0.6),  size=3.0) + 
+  geom_text(aes(label= tipo_prod), stat = "identity", vjust=-0.9, color="lightblue",
+            position = position_stack(0.4),  size=2.0) +
+  coord_polar(theta="y")+ theme_fivethirtyeight()+theme(plot.background = element_rect(fill = "green"))
+
+VTA_TECNO
+
+
+#### ahora veremos que pasó con afiliados
+
+Vta_df2  <- mutate(Vta_df, REv_TP = paste(Vta_df$valid_art, Vta_df$tipo_prod, sep = "_"))
+
+Vta_df2  <- Vta_df2 [c(1:4, 9, 10, 5, 6, 11, 15, 7, 8)]
+
+Vta_df2  <- mutate(Vta_df2, PrecioVTa = Vta_df$VentasARS/Vta_df$Cantidad)
+
+Vta_df2[is.na(Vta_df2)] <- 0
+Vta_df2$PrecioVTa  <- as.numeric(gsub(Inf, 0, Vta_df2$PrecioVTa ))
+
+vta_afiliado   <- filter(Vta_df2, Afiliado.S.N == "Afiliado")
+vta_Noafiliado   <- filter(Vta_df2, Afiliado.S.N == "No Afiliado")
+
+summary(vta_afiliado$PrecioVTa)
+summary(vta_Noafiliado$PrecioVTa)
+
+colSums(Vta_df2[, c(11:13)], na.rm = TRUE)
+
+
+Vta_rub1  <- Vta_df2 %>%
+  group_by(REv_TP, Rubro) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/1000, 1),
+    PrecioVTa = mean(PrecioVTa))   %>% 
+  slice_max(n=3, order_by = Cantidad_SUM, with_ties = TRUE) %>%
+  ggplot( aes(REv_TP, Cantidad_SUM, fill = Rubro)) + 
+  geom_col(stat = "identity", position = "dodge", color = "blue") + 
+  labs(title = 'Ventas x Tipo Producto (en Cantidad)',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Cantidad vs Pesos',
+       y = NULL,
+       x = 'Tipos de Productos') + 
+  
+  geom_text(aes( label = Rubro),
+       stat = "identity",
+       position = position_stack(vjust = .52), hjust = 0.8,
+       angle = 45,
+       size = 2) +
+  geom_text(aes( label = Cantidad_SUM),
+            stat = "identity",
+            position = position_stack(vjust = .2), hjust = -1,
+            angle = 40,
+            size= 3)  + theme_excel_new() +
+  
+  theme(legend.position='none',  
+        axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0))
+  
+Vta_rub2  <- Vta_df2 %>%
+  group_by(REv_TP, Rubro) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/1000, 1),
+    PrecioVTa = mean(PrecioVTa))   %>% 
+  slice_max(n=3, order_by = VentasARS, with_ties = TRUE) %>%
+  ggplot( aes(REv_TP, VentasARS, fill = Rubro)) + 
+  geom_col(position = "dodge", color = "blue") + 
+  labs(title = 'Ventas x Tipo Producto (en MILES PESOS)',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Cantidad vs Pesos',
+       y = NULL,
+       x = 'Tipos de Productos') +
+  
+  ylim(c(0, 20000)) +
+  geom_text(aes(label = Rubro),
+            stat = "identity",
+            position = position_stack(vjust = .55), hjust = 0.5,
+            angle = 45,
+            size= 2) + 
+  geom_text(aes( label = VentasARS),
+            stat = "identity",
+            position = position_stack (vjust = .3), hjust = -1,
+            angle = 40,
+            size= 2.5) + theme_excel_new() +
+  theme(legend.position='none', 
+        axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0))
+
+
+
+Vta_rub1 | Vta_rub2
+
+#install.packages("writexl")
+library("writexl")
+
+#write_xlsx(Vta_df2, "Revisar VTADF2.xlsx")
+
+
+#Vta_df$tipo_prod  <- ifelse(xor(Vta_df$Rubro== "CELULARES",Vta_df$Rubro==  "TV LED",Vta_df$Rubro==  "BAFLES Y COLUMNAS",Vta_df$Rubro==  "AUDIO PORTABLE",Vta_df$Rubro==  "NOTEBOOKS") , "TECNO", "NO TECNO")
+tm1 <- theme( plot.background = element_rect(fill = "light grey", ),
+              panel.background = element_rect(fill = "#EEAD0E"),
+              axis.text.x = element_text(angle = -30, vjust = 1, hjust = 0)) 
+
+Vta_rub  <- Vta_df2 %>%
+  group_by(Afiliado.S.N, REv_TP) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/1000, 1))   %>% ggplot( aes(REv_TP, VentasARS, fill = Afiliado.S.N)) + 
+  geom_col(stat = "identity", position = "dodge", color = "blue") + 
+  scale_fill_manual(values=c("lightgreen", "yellowgreen", "lightblue")) +
+  labs(title = 'Ventas x Tipo Producto (en MILES PESOS)',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Afiliados vs NO Afiliados',
+       y = NULL,
+       x = 'Tipos de Productos') + geom_text(aes(x=REv_TP, y=VentasARS, label = VentasARS),
+                                             stat = "identity",
+                                        position = position_stack(vjust = .9),
+                                        angle = -30) +
+  coord_flip() + tm1 #+ geom_text(aes(VentasARS))
+
+
+Vta_rub
+
+
+vta_af  <- vta_afiliado %>%
+  group_by(REv_TP) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/1000, 1))  %>% ggplot( aes(REv_TP, VentasARS, fill = REv_TP)) + geom_col(stat = "identity", position = "dodge") + 
+  labs(title = 'Ventas Afiliados x Tipo Producto (en MILES PESOS)',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Solo Afiliados',
+       y = NULL,
+       x = 'AFILIADOS') +geom_text(aes(x=REv_TP, y=VentasARS, fill= REv_TP, label = paste("$ ", VentasARS)), 
+                                        position = position_stack(vjust = .9) ) +
+  coord_flip() + theme_dark()#+ geom_text(aes(VentasARS))
+
+vta_no_af  <- vta_Noafiliado %>%
+  group_by(REv_TP) %>%
+  summarise(
+    Cantidad_SUM = sum(Cantidad),
+    VentasARS = round(sum(VentasARS)/1000, 1))  %>% ggplot( aes(REv_TP, VentasARS, fill = REv_TP)) + geom_col(stat = "identity", position = "dodge") + 
+  labs(title = 'Ventas NO Afiliados x Tipo Producto (en MILES PESOS)',
+       subtitle = NULL,
+       tag = NULL,
+       caption = 'Solo NO Afiliados',
+       y = NULL,
+       x = 'NO AFILIADOS') +geom_text(aes(x=REv_TP, y=VentasARS, fill= REv_TP, label = paste("$ ", VentasARS)), 
+                                        position = position_stack(vjust = .9) ) +
+  coord_flip() + theme_dark()#+ geom_text(aes(VentasARS))
+
+vta_af/vta_no_af
+
+
+
+
+
+
+
+##### Ahora a crear en DASHBOARD con shiny ----
+library(shinydashboard)
+ui <- dashboardPage(
+  dashboardHeader(title = "Basic dashboard"),
+  dashboardSidebar(),
+  dashboardBody(
+    # Boxes need to be put in a row (or column)
+    fluidRow(
+      box(plotOutput("plot1", height = 250)),
+      
+      box(
+        title = "Controls",
+        sliderInput("slider", "Number of observations:", 1, 100, 50)
+      )
+    )
+  )
+)
+
+server <- function(input, output) {
+  set.seed(122)
+  histdata <- rnorm(500)
+  
+  output$plot1 <- renderPlot({
+    data <- histdata[seq_len(input$slider)]
+    hist(data)
+  })
+}
+
+shinyApp(ui, server)
